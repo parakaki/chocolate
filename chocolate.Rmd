@@ -1,0 +1,595 @@
+---
+title: "Chocolate Data Explored"
+author: "Patrick Arakaki"
+date: "16 March 2022"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+    df_print: paged
+    theme: flatly
+    highlight: tango
+  html_notebook:
+    toc: yes
+    toc_float: yes
+    theme: flatly
+    highlight: tango
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, fig.align = "center")
+```
+
+# Introduction
+
+Chocolate is a food product made from cocoa beans and is widely popular, particularly as a dessert. The beans are derived from the cacao tree, first cultivated at least three 3000 ago by the Mayans, Toltecs, and Aztecs. ^[Blumberg, Naomi and Myhrvold, Nathan. "chocolate". Encyclopedia Britannica, 29 Jul. 2021, [https://www.britannica.com/topic/chocolate](https://www.britannica.com/topic/chocolate). Accessed 15 March 2022.] There are many different types of chocolate, both sweet and savory.
+
+In this data exploration, we will be looking at over 2500 (plain) dark chocolate bars from all over the world. Each bar has been rated by experts on a 1-5 scale (1 being unpalatable, 5 "transcendent," as the society puts it). These data were compiled by the Manhattan Chocolate Society. ^[Brelinski, Brady and Brelinski, Andrea. _Flavors of Chocolate_, 2022. [http://flavorsofcacao.com/chocolate_database.html](http://flavorsofcacao.com/chocolate_database.html). Accessed 15 March 2022.]
+
+Our goal with this data set is largely exploration. We would like to determine any relationships between variables, most likely between descriptors and rating. For the exploration, we will be using the `tidyverse` suite of packages.
+
+```{r tidyverse, include=FALSE}
+library(tidyverse)
+library(wordcloud2)
+library(stringr)
+```
+
+---
+
+# A Look at the Data
+
+```{r data}
+chocolate <- read_csv("chocolate_ratings.csv")
+```
+
+Our data goes by the variable name `chocolate`. Let us have a quick look at the data itself.
+
+```{r data quick look}
+glimpse(chocolate)
+```
+
+We see that there are 2530 chocolate bars under consideration. There are a few cleaning steps we will take before diving in: 
+
+* Rename the columns using snake case.
+
+* Change the cocoa percent column from character to numeric.
+
+```{r data cleaning, include=FALSE}
+chocolate <- chocolate %>% 
+  mutate(
+    cocoa_percent = as.numeric(sub("%", "", `Cocoa Percent`))
+  ) %>% 
+  select(
+    id = 1, 
+    company_name = 2, 
+    company_location = 3, 
+    review_date = 4, 
+    country_of_origin = 5, 
+    country_of_origin_specific = 6, 
+    cocoa_percent, 
+    ingredients = 8, 
+    characteristics = 9, 
+    rating = 10
+  )
+```
+
+<p>
+  <a class="btn btn-primary" 
+  data-toggle="collapse" 
+  href="#quickfacts" 
+  role="button" 
+  aria-expanded="false"
+  aria-controls="quickfacts">
+    Quick facts
+  </a>
+</p>
+<div class="collapse" id="quickfacts">
+  <div class="card card-body">
+
+* Time frame: 2006 to 2021
+
+* Total number of companies: 580
+
+* Total company locations: 67
+
+* Average cocoa percentage: 71.6
+
+* Average rating (no grouping): 3.2
+
+* Total number of characteristics: 972
+
+  </div>
+</div>
+
+We can now answer a few questions using the data.
+
+## Location and chocolate bar counts
+
+```{r plot 1 bars per country}
+chocolate %>% 
+  group_by(country_of_origin) %>% 
+  summarize(count = n()) %>% 
+  ggplot(aes(reorder(country_of_origin, -count), count)) + 
+  geom_col(fill = "#2e1a0c") + 
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+    legend.position = "none"
+  ) + 
+  labs(
+    title = "Chocolate bars per country of origin",
+    x = "Country",
+    y = "Count"
+  ) 
+```
+
+The first four countries are all in Central or South America; this comes as no surprise, given chocolate's origins.
+
+Compare this plot to bars per company location.
+
+```{r plot 2 bars per company location}
+chocolate %>% 
+  group_by(company_location) %>% 
+  summarize(count = n()) %>% 
+  ggplot(aes(reorder(company_location, -count), count)) + 
+  geom_col(fill = "#2e1a0c") + 
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+    legend.position = "none"
+  ) + 
+  labs(
+    title = "Chocolate bars per company location",
+    x = "Country",
+    y = "Count"
+  ) 
+```
+
+The US far outpaces all other listed countries in terms of production but comes in twenty-first for actual beans.
+
+## Cocoa Percentage
+
+All the bars in the data set are dark chocolate, which is 50% to 90% cocoa (the rest being cocoa butter and sugar). ^[_Dark Chocolate_, 2022. The Nutrition Source, Harvard T.H. Chan School of Public Health. [https://www.hsph.harvard.edu/nutritionsource/food-features/dark-chocolate/](https://www.hsph.harvard.edu/nutritionsource/food-features/dark-chocolate/). Accessed 16 March 2022.] 
+
+First, let us count bars per percentage.
+
+```{r cocoa percent counts 1}
+chocolate %>% 
+  ggplot(aes(cocoa_percent)) + 
+  geom_histogram(binwidth = 2.5, fill = "#2e1a0c") + 
+  labs(
+    x = "Cocoa percent", 
+    y = "Count", 
+    title = "Chocolate bar counts by cocoa percentage", 
+    caption = "Binwidth = 2.5"
+  )
+```
+
+```{r cocoa percent counts 2}
+chocolate %>% 
+  group_by(cocoa_percent) %>% 
+  summarize(count = n()) %>% 
+  filter(count >= 20) %>% 
+  ggplot(aes(reorder(cocoa_percent, count), count)) + 
+  geom_col(fill = "#2e1a0c") + 
+  coord_flip() + 
+  labs(
+    x = "Cocoa percent (%)", 
+    y = "Count", 
+    title = "Chocolate bar counts by cocoa percentage", 
+    caption = "Minimum 20 bars"
+  )
+```
+
+70% cocoa is the most common by a large margin. We also have a few bars that fall outside the 50%-90% range but are still included in the data set.
+
+Does cocoa percentage have any bearing on rating?
+
+```{r rating and cocoa percentage}
+chocolate %>% 
+  group_by(cocoa_percent) %>% 
+  summarize(
+    avg_rating = mean(rating)
+  ) %>% 
+  ggplot(
+    aes(cocoa_percent, avg_rating)
+  ) + 
+  geom_jitter(color = "#2e1a0c") + 
+  geom_smooth(method = "loess", formula = y~x, color = "chartreuse3") + 
+  geom_vline(xintercept = 71.6, color = "darkblue", linetype = "dotdash") + 
+  labs(
+    title = "Average rating by cocoa percent", 
+    x = "Cocoa percent", 
+    y = "Average rating"
+  )
+```
+
+We see that cocoa percentages close to the 71.6% average value (shown by the blue dashed line) have higher ratings. However, the highest average rating belongs to 50% cocoa percentage.
+
+## Chocolate Over Time
+
+The data spans ratings from 2006 to 2021. Has any of the data changed over this time frame?
+
+```{r time 1}
+chocolate %>% 
+  group_by(review_date) %>% 
+  summarize(count = n()) %>% 
+  ggplot(aes(review_date, count)) + 
+  geom_point(color = "#2e1a0c") + 
+  geom_line(color = "#2e1a0c") + 
+  labs(
+    x = "Review year", 
+    y = "Count", 
+    title = "Chocolate bar reviews per year"
+  )
+```
+
+Any analysis done over time would be weighted in favor of 2015, and 2018 to a lesser extend. There is the least amount of data near the beginning of the time frame, as well as dips during 2017 and 2020.
+
+```{r time 2}
+chocolate %>% 
+  group_by(review_date) %>% 
+  summarize(avg_rating = mean(rating)) %>% 
+  ggplot(aes(review_date, avg_rating)) + 
+  geom_point(color = "#2e1a0c") + 
+  geom_line(color = "#2e1a0c") + 
+  labs(
+    x = "Review year", 
+    y = "Average rating", 
+    title = "Average rating per year"
+  )
+```
+
+In general, average ratings have increased over time. This could be due to a number of factors, including better production and different experts giving their ratings.
+
+## Company ratings
+
+The data set contains 580 companies, and each company makes on average 4.36 chocolate bars. Which companies make the most chocolate, and which companies have the highest ratings? We can answer the latter question as-is, and we can also set a minimum number of chocolate bars produced.
+
+```{r company setup}
+companies <- chocolate %>% 
+  select(company_name, company_location) %>% 
+  distinct(company_name, .keep_all = TRUE)
+company_counts <- chocolate %>% 
+  group_by(company_name) %>% 
+  summarize(
+    count = n(), 
+    avg_rating = mean(rating)
+  )
+company_counts <- inner_join(
+  companies, company_counts, by = "company_name"
+)
+```
+
+The most chocolate bars:
+
+```{r company most production}
+company_counts %>% 
+  arrange(desc(count)) %>% 
+  slice_head(n = 5)
+```
+
+The highest ratings:
+
+```{r company highest rating as-is}
+company_counts %>% 
+  arrange(desc(avg_rating)) %>% 
+  slice_head(n = 5)
+```
+
+Four of the five bars listed here have lower-than-average counts. We repeat this analysis twice more, once for all companies that make more than the average number of bars (that is, at least 5 bars), and once for all companies that make at least 10 bars (chosen arbitrarily).
+
+```{r company highest rating 2}
+company_counts %>% 
+  filter(count > 4.36) %>% 
+  arrange(desc(avg_rating)) %>% 
+  slice_head(n = 5)
+```
+
+```{r company highest rating 3}
+company_counts %>% 
+  filter(count >= 10) %>% 
+  arrange(desc(avg_rating)) %>% 
+  slice_head(n = 5)
+```
+
+The fact that Soma (producers of 56 bars, the most in the data set) has such a high average rating among companies producing at least 10 bars is impressive. 
+
+---
+
+# The Experts' Characteristics
+
+A major part of the data set is the list of characteristics assigned to each chocolate bar. How many unique records are there in this column?
+
+```{r unique chars}
+count(distinct(chocolate, characteristics))
+```
+
+There are 2530 chocolate bars and 2487 unique characteristic observations. In order to perform any meaningful analysis, we need to clean this up.
+
+Before separating the column, which words are the most common? We can visualize this information using a word cloud.
+
+```{r wordcloud setup}
+list <- as.list(chocolate[[9]])
+words <- toString(list)
+characteristics <- 
+  tibble(words) %>% 
+  separate_rows(words, sep = ", ") %>% 
+  separate_rows(words, sep = ",") %>% 
+  group_by(words) %>% 
+  summarize(count = n()) %>% 
+  arrange(desc(count))
+```
+
+```{r wordcloud display}
+wordcloud2(characteristics, color = "#2e1a0c")
+```
+
+Unsurprisingly, the word "sweet" comes up the most (273 times). On the other hand, words and phrases like "accessible," "rich burnt caramel," and "unrecognizable" are the least common (once each). Interestingly, the word "chocolate" comes up three times.
+
+Some words and their counts are listed below.
+
+<p>
+  <a class="btn btn-primary" 
+  data-toggle="collapse" 
+  href="#topwords" 
+  role="button" 
+  aria-expanded="false"
+  aria-controls="topwords">
+    Most common words
+  </a>
+</p>
+<div class="collapse" id="topwords">
+  <div class="card card-body">
+  
+```{r top words}
+characteristics %>% 
+  arrange(desc(count)) %>% 
+  slice_head(n = 10)
+```
+  
+  </div>
+</div>
+
+<p>
+  <a class="btn btn-primary" 
+  data-toggle="collapse" 
+  href="#bottomwords" 
+  role="button" 
+  aria-expanded="false"
+  aria-controls="bottomwords">
+    Least common words
+  </a>
+</p>
+<div class="collapse" id="bottomwords">
+  <div class="card card-body">
+  
+```{r bottom words}
+characteristics %>% 
+  filter(count == 1)
+```
+  
+  </div>
+</div>
+
+Now that we've had a look at some words and their counts, how do these relate to rating? Let us consider the most common words and plot them against their average ratings.
+
+```{r top 30 chars and avg rating, include=FALSE}
+top_char <- characteristics %>% 
+  arrange(desc(count)) %>% 
+  slice_head(n = 30)
+
+char_rating <- list()
+for (i in 1:30) {
+  char_rating[[i]] <- 
+    chocolate %>% 
+      filter(grepl(as.character(top_char[i, 1]), characteristics)) %>% 
+      summarize(
+        mean_rating = mean(rating)
+      )
+}
+char_rating <- bind_rows(char_rating)
+char_rating <- bind_cols(top_char, char_rating)
+```
+
+```{r top 30 chars and avg rating plot}
+ggplot(
+  char_rating, 
+  aes(reorder(words, mean_rating), mean_rating)
+) + 
+  geom_col(fill = "#2e1a0c") + 
+  coord_flip() + 
+  geom_hline(yintercept = 3.2, color = "chartreuse3") +
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+    legend.position = "none"
+  ) + 
+  labs(
+    title = "Average rating per most common descriptors",
+    x = "Descriptor",
+    y = "Average rating"
+  ) 
+```
+
+The horizontal green line is the average rating among all chocolate bars, regardless of descriptors. We see that "complex," "creamy," and "rich" come out on top here, whereas "dry," "vanilla," and "bitter" are at the bottom. In general, words with more positive sentiment show up above the green line, while words with negative sentiment are below the green line.
+
+---
+
+# Ingredients and Ratings
+
+As the last section of our data exploration, we consider the ingredients in each bar. These are listed by letters and are as follows: 
+
+* B: (Cocoa) beans
+
+* S: Sugar (white cane or beet)
+
+* S\*: Sweetener that is not white cane or beet sugar
+
+* C: Cocoa butter
+
+* V: Vanilla
+
+* L: Lecithin, used as an emulsifier (i.e. to mix the ingredients together) ^[_Lecithin_, 2022. Health Encyclopedia, University of Rochester Medical Center. [https://www.urmc.rochester.edu/encyclopedia/content.aspx?contenttypeid=19&contentid=lecithin](https://www.urmc.rochester.edu/encyclopedia/content.aspx?contenttypeid=19&contentid=lecithin). Accessed 16 March 2022.]
+
+* Sa: Salt
+
+In the data set are 22 combinations of ingredients. We would like to know if ingredients are related to ratings.
+
+```{r ingredients 1}
+ingredients <- chocolate %>% 
+  group_by(ingredients) %>% 
+  summarize(
+    count = n(), 
+    avg_rating = mean(rating)
+  )
+```
+
+```{r ingredients 3}
+chocolate %>% 
+  group_by(ingredients) %>% 
+  summarize(
+    count = n(),
+    avg_rating = mean(rating)
+  ) %>% 
+  ggplot(
+    aes(reorder(ingredients, avg_rating), avg_rating)
+  ) + 
+  geom_col(fill = "#2e1a0c") + 
+  geom_hline(yintercept = 3.2, color = "chartreuse3") + 
+  coord_flip() + 
+  labs(
+    title = "Average rating by ingredient listing",
+    x = "Ingredient composition",
+    y = "Average rating"
+  ) 
+```
+
+The top row is those chocolate bars without an ingredients listing, which are listed as `NA` in the data set. Setting that bar aside, we see there are exactly three combinations that have averages higher than the overall average, shown by the green line. The fact that these are the only combinations above the green line suggests that there are many more bars comprised of these ingredient combinations. Let us test that hypothesis.
+
+```{r ingredients 2}
+ggplot(
+  ingredients, 
+  aes(reorder(ingredients, -count), count)
+) + 
+  geom_col(fill = "#2e1a0c") + 
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+    legend.position = "none"
+  ) + 
+  labs(
+    title = "Chocolate bar counts by ingredient listing",
+    x = "Ingredient composition",
+    y = "Count"
+  ) 
+```
+
+Our guess is correct: the three most common combinations are: 
+
+* beans and sugar with cocoa butter (999),
+
+* beans and sugar without cocoa butter (718), and
+
+* beans, sugar, cocoa butter, and lecithin (286).
+
+An alternative sweetener doesn't appear until the sixth bar and seventh overall (31). A total of 87 bars have unknown ingredient composition.
+
+```{r ingredients setup}
+chocolate2 <- chocolate %>% 
+  separate(
+    ingredients, 
+    into = c("in_count", "ingredients"), 
+    sep = "-"
+  ) %>% 
+  mutate(
+    ingredients = str_trim(ingredients, side = "left")
+  )
+chocolate2 <- chocolate2 %>% 
+  separate(
+    ingredients, 
+    into = c(
+      "in1", "in2", "in3", "in4", "in5", "in6"
+    ), 
+    sep = ",", 
+    fill = "right"
+  )
+chocolate2 <- chocolate2 %>% 
+  mutate(
+    sugar = case_when(
+      in2 == "S" | in3 == "S" | in4 == "S" | in5 == "S" | in6 == "S" ~ TRUE,
+      TRUE ~ FALSE
+    ), 
+    other_sweetener = case_when(
+      in2 == "S*" | in3 == "S*" | in4 == "S*" | in5 == "S*" | in6 == "S*" ~ TRUE,
+      TRUE ~ FALSE
+    ), 
+    cocoa_butter = case_when(
+      in2 == "C" | in3 == "C" | in4 == "C" | in5 == "C" | in6 == "C" ~ TRUE,
+      TRUE ~ FALSE
+    ), 
+    vanilla = case_when(
+      in2 == "V" | in3 == "V" | in4 == "V" | in5 == "V" | in6 == "V" ~ TRUE,
+      TRUE ~ FALSE
+    ), 
+    lecithin = case_when(
+      in2 == "L" | in3 == "L" | in4 == "L" | in5 == "L" | in6 == "L" ~ TRUE,
+      TRUE ~ FALSE
+    ), 
+    salt = case_when(
+      in2 == "Sa" | in3 == "Sa" | in4 == "Sa" | in5 == "Sa" | in6 == "Sa" ~ TRUE,
+      TRUE ~ FALSE
+    )
+  ) %>% 
+  select(
+    id:cocoa_percent, 
+    ingredient_count = in_count, 
+    characteristics, 
+    rating, 
+    sugar:salt
+  )
+```
+
+Does the presence of an ingredient have any effect on rating? Initially, we may expect lecithin to have the widest average rating margin due to its somewhat controversial nature in the world of chocolate.
+
+```{r ingredient presence avg rating}
+ing_comparison <- list()
+for (j in 11:16) {
+  ing_comparison[[j-10]] <- chocolate2 %>% 
+    group_by(chocolate2[[j]]) %>% 
+    summarize(avg_rating = mean(rating)) %>% 
+    mutate(ingredient = colnames(chocolate2)[j])
+}
+ing_comparison <- bind_rows(ing_comparison)
+ing_comparison <- ing_comparison %>% 
+  select(
+    ingredient, 
+    avg_rating, 
+    present = 1
+  )
+```
+
+```{r ingredient comparison visual}
+ggplot(
+  ing_comparison, 
+  aes(ingredient, avg_rating, fill = present)
+) + 
+  geom_col(position = "dodge") + 
+  labs(
+    x = "Ingredient", 
+    y = "Average rating", 
+    title = "Rating comparison per ingredient", 
+    fill = "Present?", 
+    caption = "All chocolate bars have the 'beans' ingredient, so it is not included."
+  ) + 
+  scale_fill_manual(
+    values = c(
+      "TRUE" = "chartreuse3", 
+      "FALSE" = "#2e1a0c"
+    )
+  )
+```
+
+The largest difference is not lecithin, but sugar: ratings are 0.32 points higher on average for bars with sugar compared to those without. Cocoa butter and sugar are the two ingredients whose ratings are higher when present.
+
+---
+
+# Future Directions
+
+This concludes the data exploration. A suitable (but much more advanced) next step for this data set would be to produce a machine learning model that attempts to predict ratings based on chocolate bar characteristics. This may be challenging for the model as pertaining to experts' characteristics, as these are subjective assignments compared to other variables like ingredient lists and company location.
